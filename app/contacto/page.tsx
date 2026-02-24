@@ -62,7 +62,7 @@ export default function Contacto() {
           </div>
 
           <p className="text-slate-300">
-            Lunes a sábado de 9:00h a 18:00h.
+            Lunes a sábado de 9:00h a 18:00h. (Horario España)
           </p>
         </motion.div>
 

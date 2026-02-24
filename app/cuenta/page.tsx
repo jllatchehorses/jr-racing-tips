@@ -1,186 +1,244 @@
-"use client";
+import { redirect } from "next/navigation";
+import { createClient } from "../../lib/supabaseServer";
+import LogoutButton from "../components/LogoutButton";
 
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
-import { useRouter } from "next/navigation";
+export default async function CuentaPage() {
+  const supabase = await createClient();
 
-export default function CuentaPage() {
-  const [user, setUser] = useState<any>(null);
-  const router = useRouter();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  useEffect(() => {
-    const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/login");
+  }
 
-      if (!user) {
-        router.push("/login");
-      } else {
-        setUser(user);
+  // 🔹 Obtener paquetes del usuario
+  const { data: userPackages } = await supabase
+    .from("user_packages")
+    .select(`
+      id,
+      remaining_predictions,
+      created_at,
+      packages (
+        name,
+        type
+      )
+    `)
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+
+  // 🔹 Separar activos e historial
+  const activePackages =
+    userPackages?.filter((p: any) => {
+      if (p.packages?.type === "consumable") {
+        return p.remaining_predictions > 0;
       }
-    };
+      return true;
+    }) || [];
 
-    getUser();
-  }, [router]);
+  const historyPackages =
+    userPackages?.filter((p: any) => {
+      if (p.packages?.type === "consumable") {
+        return p.remaining_predictions === 0;
+      }
+      return false;
+    }) || [];
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
-  };
+  // 🔹 Obtener pronósticos asignados
+  const { data: userPredictions } = await supabase
+    .from("user_predictions")
+    .select(`
+      id,
+      assigned_at,
+      predictions (
+        id,
+        racecourse,
+        race_time,
+        race,
+        horse,
+        odds,
+        stake,
+        description,
+        type,
+        result,
+        created_at
+      )
+    `)
+    .eq("user_id", user.id)
+    .order("assigned_at", { ascending: false });
 
-  if (!user) return null;
+  const phoneNumber = "34600000000";
+  const message =
+    "Hola, tengo una consulta sobre mi cuenta en JR Racing Tips.";
+  const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(
+    message
+  )}`;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
 
       {/* HEADER */}
       <div className="border-b border-slate-800 bg-slate-900/70 backdrop-blur">
-        <div className="max-w-6xl mx-auto px-6 py-6 flex justify-between items-center">
+        <div className="max-w-6xl mx-auto px-6 py-8 flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold">
-              Hola, {user.user_metadata?.nombre || "Usuario"}
+            <h1 className="text-3xl font-bold">
+              Bienvenido, {user.user_metadata?.nombre || "Usuario"}
             </h1>
-            <p className="text-sm text-slate-400">
-              Bienvenido a tu área privada
+            <p className="text-sm text-slate-400 mt-2">
+              Gestiona tu cuenta y consulta tus pronósticos.
             </p>
           </div>
-
-          <button
-            onClick={handleLogout}
-            className="bg-red-500 hover:bg-red-600 transition px-5 py-2 rounded-lg font-semibold text-sm"
-          >
-            Cerrar sesión
-          </button>
+          <LogoutButton />
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-14 space-y-10">
-
-        {/* INFORMACIÓN USUARIO */}
-        <div className="bg-slate-900 p-8 rounded-2xl border border-slate-800 shadow-lg">
-          <h2 className="text-lg font-semibold mb-6 text-green-400">
-            Información del Usuario
-          </h2>
-
-          <div className="grid md:grid-cols-3 gap-6 text-sm">
-            <div>
-              <p className="text-slate-400">Nombre</p>
-              <p className="font-semibold">
-                {user.user_metadata?.nombre || "No disponible"}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-slate-400">Correo electrónico</p>
-              <p className="font-semibold">{user.email}</p>
-            </div>
-
-            <div>
-              <p className="text-slate-400">Estado</p>
-              <p className="font-semibold text-green-400">Activa</p>
-            </div>
-          </div>
-        </div>
+      <div className="max-w-6xl mx-auto px-6 py-14 space-y-12">
 
         {/* PAQUETES ACTIVOS */}
-        <div className="bg-slate-900 p-8 rounded-2xl border border-slate-800 shadow-lg">
-          <h2 className="text-lg font-semibold mb-6">
+        <div className="bg-slate-900 p-8 rounded-2xl border border-slate-800">
+          <h2 className="text-lg font-semibold mb-6 text-green-400">
             📦 Paquetes activos
           </h2>
 
-          <div className="space-y-4">
-            <div className="bg-slate-800 p-5 rounded-xl flex justify-between items-center">
-              <div>
-                <p className="font-semibold">🎯 Apuesta del día</p>
-                <p className="text-xs text-slate-400">Activa</p>
-              </div>
-              <span className="text-green-400 font-semibold text-sm">
-                En vigor
-              </span>
+          {activePackages.length > 0 ? (
+            <div className="space-y-4 text-sm">
+              {activePackages.map((p: any) => (
+                <div
+                  key={p.id}
+                  className="flex justify-between items-center bg-slate-800/60 p-4 rounded-lg"
+                >
+                  <span>{p.packages?.name}</span>
+
+                  {p.packages?.type === "consumable" && (
+                    <span className="text-yellow-400 font-semibold">
+                      {p.remaining_predictions} restantes
+                    </span>
+                  )}
+
+                  {p.packages?.type === "subscription" && (
+                    <span className="text-green-400 font-semibold">
+                      Activo (Mensual)
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
-
-            <div className="bg-slate-800 p-5 rounded-xl flex justify-between items-center">
-              <div>
-                <p className="font-semibold">📦 Pack 5 pronósticos</p>
-                <p className="text-xs text-slate-400">
-                  3 pronósticos restantes
-                </p>
-              </div>
-              <span className="text-yellow-400 font-semibold text-sm">
-                Parcialmente usado
-              </span>
-            </div>
-          </div>
-
-          <p className="mt-6 text-xs text-slate-500">
-            Los pronósticos se envían por WhatsApp o correo electrónico según la modalidad contratada.
-          </p>
-        </div>
-
-        {/* PRONÓSTICOS */}
-        <div className="bg-slate-900 p-8 rounded-2xl border border-slate-800 shadow-lg">
-          <h2 className="text-lg font-semibold mb-6">
-            🏇 Pronósticos Disponibles
-          </h2>
-
-          <div className="bg-slate-800 p-6 rounded-xl text-sm text-slate-400">
-            En este apartado se mostrarán los pronósticos correspondientes a tus paquetes activos.
-            <ul className="mt-4 space-y-2 list-disc list-inside">
-              <li>Se publican únicamente cuando se detecta valor real.</li>
-              <li>Cada selección incluye stake recomendado.</li>
-            </ul>
-          </div>
+          ) : (
+            <p className="text-slate-400 text-sm">
+              No tienes paquetes activos.
+            </p>
+          )}
         </div>
 
         {/* HISTORIAL */}
-        <div className="bg-slate-900 p-8 rounded-2xl border border-slate-800 shadow-lg">
-          <h2 className="text-lg font-semibold mb-6">
-            🧾 Historial de compras
-          </h2>
+        {historyPackages.length > 0 && (
+          <div className="bg-slate-900 p-8 rounded-2xl border border-slate-800">
+            <h2 className="text-lg font-semibold mb-6 text-slate-400">
+              🧾 Historial de paquetes
+            </h2>
 
-          <div className="space-y-3 text-sm">
-            <div className="flex justify-between border-b border-slate-800 pb-2">
-              <span>12/02/2026</span>
-              <span>Pack 5 pronósticos</span>
-            </div>
-            <div className="flex justify-between border-b border-slate-800 pb-2">
-              <span>10/02/2026</span>
-              <span>Apuesta del día</span>
-            </div>
-            <div className="flex justify-between">
-              <span>05/02/2026</span>
-              <span>Apuesta del día</span>
+            <div className="space-y-4 text-sm">
+              {historyPackages.map((p: any) => (
+                <div
+                  key={p.id}
+                  className="flex justify-between items-center bg-slate-800/40 p-4 rounded-lg opacity-70"
+                >
+                  <span>{p.packages?.name}</span>
+                  <span className="text-red-400 font-semibold">
+                    Consumido
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
+        )}
+
+        {/* PRONÓSTICOS */}
+        <div className="bg-slate-900 p-8 rounded-2xl border border-slate-800">
+          <h2 className="text-lg font-semibold mb-6 text-green-400">
+            🏇 Pronósticos
+          </h2>
+
+          {userPredictions && userPredictions.length > 0 ? (
+            <div className="space-y-6">
+              {userPredictions.map((item: any) => {
+                const p = item.predictions;
+
+                return (
+                  <div
+                    key={item.id}
+                    className="bg-slate-800/60 p-6 rounded-xl border border-slate-700"
+                  >
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-sm text-slate-400">
+                        {new Date(p.created_at).toLocaleString()}
+                      </span>
+
+                      <span className="text-xs px-3 py-1 rounded-full bg-green-500 text-black">
+                        {p.type === "daily"
+                          ? "Apuesta del Día"
+                          : "Pronóstico"}
+                      </span>
+                    </div>
+
+                    <h3 className="text-xl font-bold mb-2">
+                      🐎 {p.horse}
+                    </h3>
+
+                    <div className="text-sm text-slate-300 space-y-1 mb-3">
+                      <p>📍 {p.racecourse}</p>
+                      <p>🏁 {p.race}</p>
+                      <p>🕒 {p.race_time}</p>
+                      <p>💰 Cuota: {p.odds}</p>
+                      <p>📊 Stake: {p.stake}</p>
+                    </div>
+
+                    <div className="text-sm text-slate-400 border-t border-slate-700 pt-3">
+                      {p.description}
+                    </div>
+
+                    <div className="mt-4 text-sm">
+                      {p.result === "pending" && (
+                        <span className="text-slate-400">
+                          Resultado pendiente
+                        </span>
+                      )}
+                      {p.result === "won" && (
+                        <span className="text-green-400 font-semibold">
+                          ✅ Ganado
+                        </span>
+                      )}
+                      {p.result === "lost" && (
+                        <span className="text-red-400 font-semibold">
+                          ❌ Perdido
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-slate-400 text-sm">
+              No tienes pronósticos disponibles.
+            </p>
+          )}
         </div>
 
         {/* SOPORTE */}
-        <div className="bg-slate-900 p-8 rounded-2xl border border-slate-800 shadow-lg">
-          <h2 className="text-lg font-semibold mb-4">
+        <div className="bg-slate-900 p-8 rounded-2xl border border-slate-800">
+          <h2 className="text-lg font-semibold mb-6 text-green-400">
             🛠️ Soporte
           </h2>
 
-          <p className="text-sm text-slate-400 mb-6">
-            Si tienes cualquier duda sobre tu cuenta, paquetes o pronósticos,
-            puedes ponerte en contacto con nuestro equipo.
-          </p>
-
-          <div className="flex flex-wrap gap-4">
-           <a
-  href="/contacto"
-  className="bg-green-500 hover:bg-green-600 hover:scale-105 active:scale-95 transition-all duration-300 px-5 py-3 rounded-lg font-semibold text-sm flex items-center gap-2"
->
-  🎧 Contactar con soporte
-</a>
-
-           <a
-  href="mailto:soporte@tudominio.com?subject=Consulta sobre mi cuenta JR Racing Tips"
-  className="border border-slate-700 hover:border-slate-500 hover:bg-slate-800 transition px-5 py-3 rounded-lg text-sm flex items-center gap-2"
->
-  ✉️ Enviar email directo
-</a>
-          </div>
+          <a
+            href={whatsappUrl}
+            target="_blank"
+            className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-600 transition px-6 py-3 rounded-lg font-semibold text-sm"
+          >
+            💬 Contactar por WhatsApp
+          </a>
         </div>
 
       </div>
