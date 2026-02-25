@@ -1,24 +1,8 @@
-import { redirect } from "next/navigation";
 import { createClient } from "../../../lib/supabaseServer";
 import Link from "next/link";
 
 export default async function AdminClientsPage() {
   const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  // 🔒 Seguridad admin
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user?.id)
-    .single();
-
-  if (!user || profile?.role !== "admin") {
-    redirect("/");
-  }
 
   const { data: clients } = await supabase
     .from("profiles")
@@ -26,6 +10,8 @@ export default async function AdminClientsPage() {
       id,
       full_name,
       email,
+      role,
+      created_at,
       user_packages (
         id,
         remaining_predictions,
@@ -34,13 +20,23 @@ export default async function AdminClientsPage() {
           type
         )
       )
-    `);
+    `)
+    .order("created_at", { ascending: false });
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-10">
+    <div>
       <h1 className="text-3xl font-bold mb-10 text-green-400">
-        Panel Admin — Clientes
+        Clientes
       </h1>
+
+      {/* Buscador visual (preparado) */}
+      <div className="mb-8">
+        <input
+          type="text"
+          placeholder="Buscar por email..."
+          className="w-full md:w-1/3 p-3 rounded-lg bg-slate-900 border border-slate-700 focus:border-green-500 outline-none"
+        />
+      </div>
 
       <div className="space-y-6">
         {clients?.map((client: any) => {
@@ -55,7 +51,7 @@ export default async function AdminClientsPage() {
           return (
             <div
               key={client.id}
-              className="bg-slate-900 p-6 rounded-xl border border-slate-800"
+              className="bg-slate-900 p-6 rounded-xl border border-slate-800 hover:border-green-500 transition"
             >
               <div className="flex justify-between items-center">
                 <div>
@@ -64,6 +60,9 @@ export default async function AdminClientsPage() {
                   </h2>
                   <p className="text-sm text-slate-400">
                     {client.email}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Rol: {client.role}
                   </p>
                 </div>
 
@@ -82,7 +81,7 @@ export default async function AdminClientsPage() {
                       📦 {p.packages?.name} —{" "}
                       {p.packages?.type === "consumable"
                         ? `${p.remaining_predictions} restantes`
-                        : "Activo"}
+                        : "Mensual Activo"}
                     </div>
                   ))
                 ) : (

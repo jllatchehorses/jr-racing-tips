@@ -58,10 +58,12 @@ export async function POST(req: Request) {
     );
   }
 
-  // 2️⃣ Obtener todos los user_packages
-  const { data: userPackages, error: usersError } = await supabase
-    .from("user_packages")
-    .select("*");
+  // 2️⃣ Obtener user_packages activos y no vencidos
+const { data: userPackages, error: usersError } = await supabase
+  .from("user_packages")
+  .select("*")
+  .eq("status", "active")
+  .or("expires_at.is.null,expires_at.gt.now()");
 
   if (usersError) {
     return NextResponse.json(

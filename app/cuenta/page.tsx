@@ -13,13 +13,15 @@ export default async function CuentaPage() {
     redirect("/login");
   }
 
-  // 🔹 Obtener paquetes del usuario
+  // 🔹 Obtener paquetes del usuario (incluyendo status y expiración)
   const { data: userPackages } = await supabase
     .from("user_packages")
     .select(`
       id,
       remaining_predictions,
       created_at,
+      status,
+      expires_at,
       packages (
         name,
         type
@@ -28,20 +30,42 @@ export default async function CuentaPage() {
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
-  // 🔹 Separar activos e historial
+  const now = new Date();
+
+  // 🔹 Separar activos e historial correctamente
   const activePackages =
     userPackages?.filter((p: any) => {
+      if (p.status !== "active") return false;
+
+      if (p.packages?.type === "subscription") {
+        if (!p.expires_at) return false;
+        return new Date(p.expires_at) > now;
+      }
+
       if (p.packages?.type === "consumable") {
         return p.remaining_predictions > 0;
       }
-      return true;
+
+      return false;
     }) || [];
 
   const historyPackages =
     userPackages?.filter((p: any) => {
-      if (p.packages?.type === "consumable") {
-        return p.remaining_predictions === 0;
+      if (
+        p.packages?.type === "subscription" &&
+        p.expires_at &&
+        new Date(p.expires_at) <= now
+      ) {
+        return true;
       }
+
+      if (
+        p.packages?.type === "consumable" &&
+        p.remaining_predictions === 0
+      ) {
+        return true;
+      }
+
       return false;
     }) || [];
 
@@ -68,7 +92,7 @@ export default async function CuentaPage() {
     .eq("user_id", user.id)
     .order("assigned_at", { ascending: false });
 
-  const phoneNumber = "34600000000";
+  const phoneNumber = "34634031040";
   const message =
     "Hola, tengo una consulta sobre mi cuenta en JR Racing Tips.";
   const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(
@@ -118,7 +142,8 @@ export default async function CuentaPage() {
 
                   {p.packages?.type === "subscription" && (
                     <span className="text-green-400 font-semibold">
-                      Activo (Mensual)
+                      Activo hasta{" "}
+                      {new Date(p.expires_at).toLocaleDateString()}
                     </span>
                   )}
                 </div>
@@ -146,7 +171,7 @@ export default async function CuentaPage() {
                 >
                   <span>{p.packages?.name}</span>
                   <span className="text-red-400 font-semibold">
-                    Consumido
+                    Finalizado
                   </span>
                 </div>
               ))}

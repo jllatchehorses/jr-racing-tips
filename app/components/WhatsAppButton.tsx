@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 export default function WhatsAppButton() {
-  const phoneNumber = "34600000000"; // 🔴 Cambiar mañana
+  const phoneNumber = "34634031040"; 
   const message = "Hola, tengo una consulta sobre JR Racing Tips.";
   const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(
     message

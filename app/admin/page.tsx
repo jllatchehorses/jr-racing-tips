@@ -1,111 +1,135 @@
-"use client";
+import { createClient } from "../../lib/supabaseServer";
 
-import { useState } from "react";
+export default async function AdminDashboard() {
+  const supabase = await createClient();
 
-export default function AdminPage() {
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  // 📊 MÉTRICAS GENERALES
+  const { count: totalUsers } = await supabase
+    .from("profiles")
+    .select("*", { count: "exact", head: true });
 
-  const [form, setForm] = useState({
-    racecourse: "",
-    race_time: "",
-    race: "",
-    horse: "",
-    odds: "",
-    stake: "",
-    analysis: "",
-  });
+  const { count: totalPredictions } = await supabase
+    .from("predictions")
+    .select("*", { count: "exact", head: true });
 
-  const handleChange = (e: any) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
+  const { count: pendingPredictions } = await supabase
+    .from("predictions")
+    .select("*", { count: "exact", head: true })
+    .eq("result", "pending");
 
-  const handlePublish = async (type: "regular" | "daily") => {
-    setLoading(true);
-    setMessage("");
+  // 💰 MÉTRICAS FINANCIERAS
 
-    const res = await fetch("/api/admin/publish", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ ...form, type }),
-    });
+  // Ingresos totales históricos
+  const { data: allPayments } = await supabase
+    .from("payments")
+    .select("amount")
+    .eq("status", "completed");
 
-    const data = await res.json();
+  const totalIncome =
+    allPayments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
 
-    if (!res.ok) {
-      setMessage(data.error || "Error al publicar");
-      setLoading(false);
-      return;
-    }
+  // Ingresos del mes actual
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
 
-    setMessage("Pronóstico publicado correctamente ✅");
-    setForm({
-      racecourse: "",
-      race_time: "",
-      race: "",
-      horse: "",
-      odds: "",
-      stake: "",
-      analysis: "",
-    });
+  const { data: monthlyPayments } = await supabase
+    .from("payments")
+    .select("amount")
+    .eq("status", "completed")
+    .gte("created_at", startOfMonth.toISOString());
 
-    setLoading(false);
-  };
+  const monthlyIncome =
+    monthlyPayments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+
+  // Suscripciones activas
+  const { count: activeSubscriptions } = await supabase
+    .from("user_packages")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "active")
+    .not("expires_at", "is", null)
+    .gt("expires_at", new Date().toISOString());
+
+  // Pagos completados
+  const { count: completedPayments } = await supabase
+    .from("payments")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "completed");
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white px-6 py-20">
-      <div className="max-w-3xl mx-auto bg-slate-900 p-10 rounded-2xl border border-slate-800 shadow-lg">
+    <div>
+      <h1 className="text-3xl font-bold mb-12 text-green-400">
+        Dashboard Admin
+      </h1>
 
-        <h1 className="text-3xl font-bold mb-10 text-green-400">
-          Panel de Administración
-        </h1>
+      {/* MÉTRICAS GENERALES */}
+      <div className="grid md:grid-cols-3 gap-8 mb-16">
 
-        <div className="space-y-5">
+        <Card title="Total Usuarios" value={totalUsers || 0} />
 
-          <input name="racecourse" placeholder="Hipódromo" value={form.racecourse} onChange={handleChange} className="input" />
-          <input name="race_time" placeholder="Hora (ej: 15:30)" value={form.race_time} onChange={handleChange} className="input" />
-          <input name="race" placeholder="Carrera (ej: 3ª)" value={form.race} onChange={handleChange} className="input" />
-          <input name="horse" placeholder="Caballo" value={form.horse} onChange={handleChange} className="input" />
-          <input name="odds" placeholder="Cuota (ej: 3.20)" value={form.odds} onChange={handleChange} className="input" />
-          <input name="stake" placeholder="Stake (ej: 2/10)" value={form.stake} onChange={handleChange} className="input" />
+        <Card title="Total Pronósticos" value={totalPredictions || 0} />
 
-          <textarea
-            name="analysis"
-            placeholder="Análisis"
-            value={form.analysis}
-            onChange={handleChange}
-            rows={4}
-            className="input"
-          />
+        <Card title="Pendientes de resultado" value={pendingPredictions || 0} />
 
-          <div className="flex gap-4 pt-4">
-            <button
-              onClick={() => handlePublish("regular")}
-              disabled={loading}
-              className="flex-1 bg-green-500 hover:bg-green-600 py-4 rounded-lg font-semibold"
-            >
-              Publicar Pronóstico
-            </button>
-
-            <button
-              onClick={() => handlePublish("daily")}
-              disabled={loading}
-              className="flex-1 bg-yellow-500 hover:bg-yellow-600 py-4 rounded-lg font-semibold text-black"
-            >
-              Publicar Apuesta del Día
-            </button>
-          </div>
-
-          {message && (
-            <p className="text-sm mt-4 text-center text-slate-300">
-              {message}
-            </p>
-          )}
-
-        </div>
       </div>
+
+      {/* PANEL FINANCIERO */}
+      <h2 className="text-2xl font-semibold mb-8 text-green-400">
+        💰 Panel Financiero
+      </h2>
+
+      <div className="grid md:grid-cols-4 gap-8">
+
+        <Card
+          title="Ingresos Totales"
+          value={`${totalIncome.toFixed(2)} €`}
+          highlight
+        />
+
+        <Card
+          title="Ingresos Mes Actual"
+          value={`${monthlyIncome.toFixed(2)} €`}
+          highlight
+        />
+
+        <Card
+          title="Suscripciones Activas"
+          value={activeSubscriptions || 0}
+        />
+
+        <Card
+          title="Pagos Completados"
+          value={completedPayments || 0}
+        />
+
+      </div>
+    </div>
+  );
+}
+
+function Card({
+  title,
+  value,
+  highlight = false,
+}: {
+  title: string;
+  value: any;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={`bg-slate-900 p-8 rounded-xl border border-slate-800 transition-all duration-300 ${
+        highlight
+          ? "hover:border-green-500 hover:shadow-[0_0_25px_rgba(34,197,94,0.25)]"
+          : ""
+      }`}
+    >
+      <h2 className="text-lg text-slate-400 mb-2">
+        {title}
+      </h2>
+      <p className="text-3xl font-bold text-green-400">
+        {value}
+      </p>
     </div>
   );
 }

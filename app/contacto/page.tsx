@@ -42,7 +42,7 @@ export default function Contacto() {
           <ContactCard
             icon={<Phone size={22} />}
             title="WhatsApp Web"
-            content="6xx xx xx xx"
+            content="34634031040"
           />
         </div>
 
