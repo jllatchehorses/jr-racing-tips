@@ -8,6 +8,10 @@ export default function RegistroPage() {
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
+  // ✅ NUEVOS ESTADOS LEGALES
+  const [isAdult, setIsAdult] = useState(false);
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
+
   const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
@@ -34,6 +38,19 @@ export default function RegistroPage() {
       return;
     }
 
+    // ✅ VALIDACIONES LEGALES
+    if (!isAdult) {
+      setErrorMessage("Debes confirmar que eres mayor de 18 años.");
+      setLoading(false);
+      return;
+    }
+
+    if (!acceptedLegal) {
+      setErrorMessage("Debes aceptar el Aviso Legal y la Política de Privacidad.");
+      setLoading(false);
+      return;
+    }
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -41,6 +58,8 @@ export default function RegistroPage() {
         data: {
           nombre,
           telefono,
+          is_adult_confirmed: true,
+          legal_accepted: true,
         },
       },
     });
@@ -52,6 +71,8 @@ export default function RegistroPage() {
         "Registro exitoso. Revisa tu email para confirmar tu cuenta."
       );
       e.currentTarget.reset();
+      setIsAdult(false);
+      setAcceptedLegal(false);
     }
 
     setLoading(false);
@@ -119,6 +140,50 @@ export default function RegistroPage() {
             autoComplete="new-password"
             className="w-full p-4 rounded-lg bg-slate-800 border border-slate-700 focus:outline-none focus:border-green-500"
           />
+
+          {/* 🔥 BLOQUE LEGAL NUEVO */}
+          <div className="space-y-4 text-sm">
+
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={isAdult}
+                onChange={() => setIsAdult(!isAdult)}
+                className="mt-1 accent-green-500"
+              />
+              <span className="text-slate-300">
+                Confirmo que soy mayor de 18 años.
+              </span>
+            </label>
+
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={acceptedLegal}
+                onChange={() => setAcceptedLegal(!acceptedLegal)}
+                className="mt-1 accent-green-500"
+              />
+              <span className="text-slate-300">
+                He leído y acepto el{" "}
+                <a
+                  href="/aviso-legal"
+                  target="_blank"
+                  className="text-green-400 hover:underline"
+                >
+                  Aviso Legal
+                </a>{" "}
+                y la{" "}
+                <a
+                  href="/politica-privacidad"
+                  target="_blank"
+                  className="text-green-400 hover:underline"
+                >
+                  Política de Privacidad
+                </a>.
+              </span>
+            </label>
+
+          </div>
 
           <button
             type="submit"

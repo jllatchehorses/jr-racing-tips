@@ -14,6 +14,7 @@ export default function AdminPage() {
     odds: "",
     stake: "",
     analysis: "",
+    race_datetime: "", // ✅ NUEVO CAMPO
   });
 
   const handleChange = (e: any) => {
@@ -49,6 +50,7 @@ export default function AdminPage() {
       odds: "",
       stake: "",
       analysis: "",
+      race_datetime: "", // ✅ reset
     });
 
     setLoading(false);
@@ -64,12 +66,63 @@ export default function AdminPage() {
 
         <div className="space-y-5">
 
-          <input name="racecourse" placeholder="Hipódromo" value={form.racecourse} onChange={handleChange} className="input" />
-          <input name="race_time" placeholder="Hora (ej: 15:30)" value={form.race_time} onChange={handleChange} className="input" />
-          <input name="race" placeholder="Carrera (ej: 3ª)" value={form.race} onChange={handleChange} className="input" />
-          <input name="horse" placeholder="Caballo" value={form.horse} onChange={handleChange} className="input" />
-          <input name="odds" placeholder="Cuota (ej: 3.20)" value={form.odds} onChange={handleChange} className="input" />
-          <input name="stake" placeholder="Stake (ej: 2/10)" value={form.stake} onChange={handleChange} className="input" />
+          <input
+            name="racecourse"
+            placeholder="Hipódromo"
+            value={form.racecourse}
+            onChange={handleChange}
+            className="input"
+          />
+
+          <input
+            name="race_time"
+            placeholder="Hora (ej: 15:30)"
+            value={form.race_time}
+            onChange={handleChange}
+            className="input"
+          />
+
+          {/* ✅ NUEVO CAMPO PROFESIONAL */}
+          <input
+            type="datetime-local"
+            name="race_datetime"
+            value={form.race_datetime}
+            onChange={handleChange}
+            className="input"
+            required
+          />
+
+          <input
+            name="race"
+            placeholder="Carrera (ej: 3ª)"
+            value={form.race}
+            onChange={handleChange}
+            className="input"
+          />
+
+          <input
+            name="horse"
+            placeholder="Caballo"
+            value={form.horse}
+            onChange={handleChange}
+            className="input"
+          />
+
+          <input
+            name="odds"
+            placeholder="Cuota (ej: 3.20)"
+            value={form.odds}
+            onChange={handleChange}
+            className="input"
+          />
+
+          <input
+            name="stake"
+            placeholder="Stake (ej: 2/10)"
+            value={form.stake}
+            onChange={handleChange}
+            className="input"
+          />
 
           <textarea
             name="analysis"

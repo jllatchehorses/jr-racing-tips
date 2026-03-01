@@ -1,45 +1,33 @@
-import { redirect } from "next/navigation";
-import { createClient } from "../../../lib/supabaseServer";
-import { revalidatePath } from "next/cache";
+"use client";
 
-export default async function AdminPredictionsPage() {
-  const supabase = await createClient();
+import { useEffect, useState } from "react";
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+export default function AdminPredictionsPage() {
+  const [predictions, setPredictions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // 🔒 Seguridad admin
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user?.id)
-    .single();
+  useEffect(() => {
+    fetchPredictions();
+  }, []);
 
-  if (!user || profile?.role !== "admin") {
-    redirect("/");
+  async function fetchPredictions() {
+    const res = await fetch("/api/admin/get-predictions");
+    const data = await res.json();
+    setPredictions(data.predictions || []);
+    setLoading(false);
   }
 
-  const { data: predictions } = await supabase
-    .from("predictions")
-    .select("*")
-    .order("created_at", { ascending: false });
+  async function updateResult(id: string, result: string) {
+    await fetch("/api/admin/update-result", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, result }),
+    });
 
-  async function updateResult(formData: FormData) {
-    "use server";
-
-    const id = formData.get("id") as string;
-    const result = formData.get("result") as string;
-
-    const supabase = await createClient();
-
-    await supabase
-      .from("predictions")
-      .update({ result })
-      .eq("id", id);
-
-    revalidatePath("/admin/predictions");
+    fetchPredictions();
   }
+
+  if (loading) return <div className="p-10 text-white">Cargando...</div>;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white p-10">
@@ -48,18 +36,22 @@ export default async function AdminPredictionsPage() {
       </h1>
 
       <div className="space-y-6">
-        {predictions?.map((p: any) => (
+        {predictions.map((p: any) => (
           <div
             key={p.id}
             className="bg-slate-900 p-6 rounded-xl border border-slate-800"
           >
             <div className="flex justify-between items-center mb-3">
-              <h2 className="text-xl font-bold">
-                🐎 {p.horse}
-              </h2>
+              <h2 className="text-xl font-bold">🐎 {p.horse}</h2>
 
               <span className="text-sm text-slate-400">
-                {new Date(p.created_at).toLocaleString()}
+                {p.race_datetime
+                  ? new Date(p.race_datetime).toLocaleString("es-ES", {
+                      timeZone: "Europe/Madrid",
+                    })
+                  : new Date(p.created_at).toLocaleString("es-ES", {
+                      timeZone: "Europe/Madrid",
+                    })}
               </span>
             </div>
 
@@ -72,54 +64,43 @@ export default async function AdminPredictionsPage() {
             </div>
 
             <div className="mb-4">
-              <span className="text-sm">
-                Estado actual:{" "}
-                {p.result === "pending" && (
-                  <span className="text-slate-400">Pendiente</span>
-                )}
-                {p.result === "won" && (
-                  <span className="text-green-400 font-semibold">Ganado</span>
-                )}
-                {p.result === "lost" && (
-                  <span className="text-red-400 font-semibold">Perdido</span>
-                )}
-                {p.result === "void" && (
-                  <span className="text-yellow-400 font-semibold">Nulo</span>
-                )}
-              </span>
+              {p.result === "pending" && (
+                <span className="text-slate-400">Pendiente</span>
+              )}
+              {p.result === "won" && (
+                <span className="text-green-400 font-semibold">Ganado</span>
+              )}
+              {p.result === "lost" && (
+                <span className="text-red-400 font-semibold">Perdido</span>
+              )}
+              {p.result === "void" && (
+                <span className="text-yellow-400 font-semibold">Nulo</span>
+              )}
             </div>
 
             {p.result === "pending" && (
-              <form action={updateResult} className="flex flex-wrap gap-4">
-                <input type="hidden" name="id" value={p.id} />
-
+              <div className="flex gap-4">
                 <button
-                  type="submit"
-                  name="result"
-                  value="won"
-                  className="bg-green-500 hover:bg-green-600 px-4 py-2 rounded-lg text-sm font-semibold"
+                  onClick={() => updateResult(p.id, "won")}
+                  className="bg-green-500 px-4 py-2 rounded-lg text-sm font-semibold"
                 >
-                  ✅ Marcar Ganado
+                  ✅ Ganado
                 </button>
 
                 <button
-                  type="submit"
-                  name="result"
-                  value="lost"
-                  className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg text-sm font-semibold"
+                  onClick={() => updateResult(p.id, "lost")}
+                  className="bg-red-500 px-4 py-2 rounded-lg text-sm font-semibold"
                 >
-                  ❌ Marcar Perdido
+                  ❌ Perdido
                 </button>
 
                 <button
-                  type="submit"
-                  name="result"
-                  value="void"
-                  className="bg-yellow-500 hover:bg-yellow-600 text-black px-4 py-2 rounded-lg text-sm font-semibold"
+                  onClick={() => updateResult(p.id, "void")}
+                  className="bg-yellow-500 text-black px-4 py-2 rounded-lg text-sm font-semibold"
                 >
-                  ⚖️ Marcar Nulo
+                  ⚖️ Nulo
                 </button>
-              </form>
+              </div>
             )}
           </div>
         ))}

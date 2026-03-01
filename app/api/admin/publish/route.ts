@@ -33,7 +33,16 @@ export async function POST(req: Request) {
     stake,
     analysis,
     type,
+    race_datetime, // ✅ NUEVO
   } = body;
+
+  // 🔒 Validación mínima
+  if (!race_datetime) {
+    return NextResponse.json(
+      { error: "Debes indicar fecha y hora de la carrera" },
+      { status: 400 }
+    );
+  }
 
   // 1️⃣ Insertar prediction
   const { data: prediction, error: insertError } = await supabase
@@ -47,6 +56,8 @@ export async function POST(req: Request) {
       stake,
       description: analysis,
       type,
+      race_datetime, // ✅ GUARDAMOS TIMESTAMP REAL
+      result: "pending", // ✅ SIEMPRE INICIA PENDIENTE
     })
     .select()
     .single();
@@ -59,11 +70,11 @@ export async function POST(req: Request) {
   }
 
   // 2️⃣ Obtener user_packages activos y no vencidos
-const { data: userPackages, error: usersError } = await supabase
-  .from("user_packages")
-  .select("*")
-  .eq("status", "active")
-  .or("expires_at.is.null,expires_at.gt.now()");
+  const { data: userPackages, error: usersError } = await supabase
+    .from("user_packages")
+    .select("*")
+    .eq("status", "active")
+    .or("expires_at.is.null,expires_at.gt.now()");
 
   if (usersError) {
     return NextResponse.json(
@@ -75,7 +86,6 @@ const { data: userPackages, error: usersError } = await supabase
   const usersToAssign: string[] = [];
 
   for (const up of userPackages || []) {
-    // Obtener tipo de paquete manualmente
     const { data: pack } = await supabase
       .from("packages")
       .select("type")
@@ -113,6 +123,7 @@ const { data: userPackages, error: usersError } = await supabase
   const assignments = usersToAssign.map((userId) => ({
     user_id: userId,
     prediction_id: prediction.id,
+    assigned_at: new Date().toISOString(), // ✅ añadimos timestamp asignación
   }));
 
   if (assignments.length > 0) {

@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Search, CheckCircle, Send, ChevronDown } from "lucide-react";
+import {
+  Search,
+  CheckCircle,
+  Send,
+  ChevronDown,
+  Clock,
+} from "lucide-react";
 
 export default function ComoFunciona() {
   return (
@@ -28,7 +34,8 @@ export default function ComoFunciona() {
           </h3>
           <p className="text-slate-300">
             Cada carrera se estudia en profundidad considerando superficie,
-            distancia, forma, jockey, entrenador, peso y contexto general.
+            distancia, forma, jockey, entrenador, peso, mapa de carrera
+            y proyección de ritmo.
           </p>
         </div>
 
@@ -40,6 +47,7 @@ export default function ComoFunciona() {
           <p className="text-slate-300">
             Solo se publican pronósticos cuando existe valor real.
             No hay número fijo de selecciones diarias.
+            La intensidad de la señal determina la ejecución.
           </p>
         </div>
 
@@ -49,11 +57,36 @@ export default function ComoFunciona() {
             3. Publicación
           </h3>
           <p className="text-slate-300">
-            Pronósticos publicados de lunes a sábado.
-            Se evita el mercado dominical por su alta imprevisibilidad.
+            Los pronósticos se publican entre 2 y 3 horas antes del inicio
+            de la carrera, permitiendo operar con margen suficiente.
           </p>
         </div>
 
+      </div>
+
+      {/* PUBLICACIÓN Y CUOTAS */}
+      <div className="bg-slate-800 border border-slate-700 p-10 rounded-xl mb-24 hover:border-green-400 transition-all duration-300">
+        <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+          <Clock className="text-green-400" size={22} />
+          Publicación y registro de cuotas
+        </h2>
+
+        <div className="space-y-4 text-slate-300">
+          <p>
+            Todos los picks se publican entre 2 y 3 horas antes del inicio
+            de la carrera.
+          </p>
+
+          <p>
+            La cuota registrada corresponde al precio de mercado disponible
+            en el momento exacto de publicación del pronóstico.
+          </p>
+
+          <p>
+            Cada selección queda registrada con su hora exacta de publicación,
+            garantizando transparencia total en el proceso.
+          </p>
+        </div>
       </div>
 
       {/* MODALIDADES */}
@@ -69,7 +102,8 @@ export default function ComoFunciona() {
               Apuesta del día
             </h3>
             <p className="text-slate-300">
-              Selección diaria con devolución del importe en caso de fallo.
+              Selección especial publicada cuando se detectan condiciones óptimas.
+              En caso de fallo, se devuelve el importe del paquete.
             </p>
           </div>
 
@@ -79,7 +113,7 @@ export default function ComoFunciona() {
             </h3>
             <p className="text-slate-300">
               Acceso flexible sin suscripción mensual.
-              Validez entre 48h y 5 días.
+              Validez limitada según el pack contratado.
             </p>
           </div>
 
@@ -107,7 +141,7 @@ export default function ComoFunciona() {
         </p>
       </div>
 
-           {/* FAQ */}
+      {/* FAQ */}
       <div className="mt-24 max-w-3xl mx-auto">
         <h2 className="text-3xl font-bold mb-12 text-center">
           Preguntas frecuentes
@@ -140,14 +174,9 @@ function FAQ() {
         "Es una selección especial publicada cuando se detectan condiciones óptimas. En caso de fallo, se devuelve el importe pagado por ese paquete.",
     },
     {
-      question: "¿Puedo comprar pronósticos sin suscribirme?",
+      question: "¿Cómo y cuándo se publican los pronósticos?",
       answer:
-        "Sí. Existen paquetes de pronósticos sueltos sin compromiso mensual, con validez limitada en el tiempo.",
-    },
-    {
-      question: "¿Cómo y cuándo se envían los pronósticos?",
-      answer:
-        "Se envían por WhatsApp o correo electrónico con antelación suficiente para poder realizar la apuesta con tranquilidad.",
+        "Los picks se publican entre 2 y 3 horas antes del inicio de la carrera. La cuota registrada es la disponible en el momento exacto de publicación.",
     },
     {
       question: "¿Qué stake se recomienda?",
@@ -177,9 +206,7 @@ function FAQ() {
             className="border border-slate-700 rounded-lg overflow-hidden bg-slate-800"
           >
             <button
-              onClick={() =>
-                setOpenIndex(isOpen ? null : index)
-              }
+              onClick={() => setOpenIndex(isOpen ? null : index)}
               className="w-full flex justify-between items-center px-6 py-5 text-left text-lg font-medium hover:bg-slate-700 transition"
             >
               <span className="flex items-center gap-3">
