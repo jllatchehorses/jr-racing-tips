@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabaseServer";
 export async function POST(req: Request) {
   const supabase = await createClient();
 
+  // 🔐 1️⃣ Verificar usuario autenticado
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -22,42 +23,57 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
   }
 
+  // 📦 2️⃣ Recoger datos del body
   const body = await req.json();
 
   const {
     racecourse,
-    race_time,
+    race_date,   // "2026-03-02"
+    race_time,   // "22:00"
     race,
     horse,
     odds,
     stake,
     analysis,
     type,
-    race_datetime, // ✅ NUEVO
   } = body;
 
-  // 🔒 Validación mínima
-  if (!race_datetime) {
+  if (!race_date || !race_time) {
     return NextResponse.json(
       { error: "Debes indicar fecha y hora de la carrera" },
       { status: 400 }
     );
   }
 
-  // 1️⃣ Insertar prediction
+  // 🕒 3️⃣ Construir race_datetime correctamente
+
+  // Interpretamos la fecha y hora como hora local de España
+  const raceDateTimeSpain = new Date(`${race_date}T${race_time}:00`);
+
+  if (isNaN(raceDateTimeSpain.getTime())) {
+    return NextResponse.json(
+      { error: "Fecha u hora inválida" },
+      { status: 400 }
+    );
+  }
+
+  // Convertimos a ISO (UTC real almacenado en DB)
+  const raceDateTimeUTC = raceDateTimeSpain.toISOString();
+
+  // 🏁 4️⃣ Insertar prediction
   const { data: prediction, error: insertError } = await supabase
     .from("predictions")
     .insert({
       racecourse,
-      race_time,
+      race_time, // solo informativo
       race,
       horse,
       odds: odds ? parseFloat(odds) : null,
       stake,
       description: analysis,
       type,
-      race_datetime, // ✅ GUARDAMOS TIMESTAMP REAL
-      result: "pending", // ✅ SIEMPRE INICIA PENDIENTE
+      race_datetime: raceDateTimeUTC,
+      result: "pending",
     })
     .select()
     .single();
@@ -69,7 +85,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // 2️⃣ Obtener user_packages activos y no vencidos
+  // 👥 5️⃣ Obtener paquetes activos
   const { data: userPackages, error: usersError } = await supabase
     .from("user_packages")
     .select("*")
@@ -83,8 +99,11 @@ export async function POST(req: Request) {
     );
   }
 
-  const usersToAssign: string[] = [];
+  const assignments: any[] = [];
+  const consumablePackages: any[] = [];
+  const dailyPackages: any[] = [];
 
+  // 🔎 6️⃣ Decidir asignaciones
   for (const up of userPackages || []) {
     const { data: pack } = await supabase
       .from("packages")
@@ -96,36 +115,50 @@ export async function POST(req: Request) {
 
     const packageType = pack.type;
 
-    // REGULAR
+    // 🎯 REGULAR
     if (type === "regular") {
       if (packageType === "consumable" && up.remaining_predictions > 0) {
-        usersToAssign.push(up.user_id);
+        assignments.push({
+          user_id: up.user_id,
+          prediction_id: prediction.id,
+          assigned_at: new Date().toISOString(),
+        });
+
+        consumablePackages.push(up);
       }
 
       if (packageType === "subscription") {
-        usersToAssign.push(up.user_id);
+        assignments.push({
+          user_id: up.user_id,
+          prediction_id: prediction.id,
+          assigned_at: new Date().toISOString(),
+        });
       }
     }
 
-    // DAILY
+    // 🎯 DAILY
     if (type === "daily") {
-      if (packageType === "daily") {
-        usersToAssign.push(up.user_id);
+      if (packageType === "daily" && up.remaining_predictions > 0) {
+        assignments.push({
+          user_id: up.user_id,
+          prediction_id: prediction.id,
+          assigned_at: new Date().toISOString(),
+        });
+
+        dailyPackages.push(up);
       }
 
       if (packageType === "subscription") {
-        usersToAssign.push(up.user_id);
+        assignments.push({
+          user_id: up.user_id,
+          prediction_id: prediction.id,
+          assigned_at: new Date().toISOString(),
+        });
       }
     }
   }
 
-  // 3️⃣ Asignar prediction
-  const assignments = usersToAssign.map((userId) => ({
-    user_id: userId,
-    prediction_id: prediction.id,
-    assigned_at: new Date().toISOString(), // ✅ añadimos timestamp asignación
-  }));
-
+  // 📝 7️⃣ Insertar asignaciones
   if (assignments.length > 0) {
     const { error: assignError } = await supabase
       .from("user_predictions")
@@ -139,9 +172,29 @@ export async function POST(req: Request) {
     }
   }
 
-  // 4️⃣ Descontar consumibles si es regular
-  if (type === "regular") {
-    await supabase.rpc("consume_prediction_for_users");
+  // 🔻 8️⃣ Consumir CONSUMABLES
+  for (const up of consumablePackages) {
+    if (up.remaining_predictions > 0) {
+      await supabase
+        .from("user_packages")
+        .update({
+          remaining_predictions: up.remaining_predictions - 1,
+        })
+        .eq("id", up.id)
+        .gt("remaining_predictions", 0);
+    }
+  }
+
+  // 🔻 9️⃣ Consumir DAILY
+  for (const up of dailyPackages) {
+    await supabase
+      .from("user_packages")
+      .update({
+        remaining_predictions: 0,
+        status: "consumed",
+      })
+      .eq("id", up.id)
+      .gt("remaining_predictions", 0);
   }
 
   return NextResponse.json({ success: true });

@@ -8,13 +8,13 @@ export default function AdminPage() {
 
   const [form, setForm] = useState({
     racecourse: "",
-    race_time: "",
+    race_time: "", // solo informativo (puedes quitarlo si quieres)
     race: "",
     horse: "",
     odds: "",
     stake: "",
     analysis: "",
-    race_datetime: "", // ✅ NUEVO CAMPO
+    race_datetime: "", // input datetime-local
   });
 
   const handleChange = (e: any) => {
@@ -25,12 +25,32 @@ export default function AdminPage() {
     setLoading(true);
     setMessage("");
 
+    if (!form.race_datetime) {
+      setMessage("Debes indicar fecha y hora de la carrera");
+      setLoading(false);
+      return;
+    }
+
+    // 🔥 Aquí está la clave
+    const [race_date, race_time_from_datetime] =
+      form.race_datetime.split("T");
+
     const res = await fetch("/api/admin/publish", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ ...form, type }),
+      body: JSON.stringify({
+        racecourse: form.racecourse,
+        race_date,                     // ✅ ahora enviamos fecha
+        race_time: race_time_from_datetime, // ✅ ahora enviamos hora
+        race: form.race,
+        horse: form.horse,
+        odds: form.odds,
+        stake: form.stake,
+        analysis: form.analysis,
+        type,
+      }),
     });
 
     const data = await res.json();
@@ -42,6 +62,7 @@ export default function AdminPage() {
     }
 
     setMessage("Pronóstico publicado correctamente ✅");
+
     setForm({
       racecourse: "",
       race_time: "",
@@ -50,7 +71,7 @@ export default function AdminPage() {
       odds: "",
       stake: "",
       analysis: "",
-      race_datetime: "", // ✅ reset
+      race_datetime: "",
     });
 
     setLoading(false);
@@ -74,15 +95,7 @@ export default function AdminPage() {
             className="input"
           />
 
-          <input
-            name="race_time"
-            placeholder="Hora (ej: 15:30)"
-            value={form.race_time}
-            onChange={handleChange}
-            className="input"
-          />
-
-          {/* ✅ NUEVO CAMPO PROFESIONAL */}
+          {/* 🔥 Solo dejamos datetime-local */}
           <input
             type="datetime-local"
             name="race_datetime"

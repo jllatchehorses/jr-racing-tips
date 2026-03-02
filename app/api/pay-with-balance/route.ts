@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabaseServer";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { assignActivePredictionsToUser } from "@/lib/assignPredictions";
 
 export async function POST(req: Request) {
-  const supabase = await createClient();
 
-  // 1️⃣ Usuario autenticado
+  // 🔐 Cliente normal SOLO para autenticar usuario
+  const supabaseAuth = await createClient();
+
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await supabaseAuth.auth.getUser();
 
   if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -19,6 +21,9 @@ export async function POST(req: Request) {
   if (!packageId) {
     return NextResponse.json({ error: "Paquete inválido" }, { status: 400 });
   }
+
+  // 🔥 A partir de aquí usamos ADMIN (sin RLS)
+  const supabase = supabaseAdmin;
 
   // 2️⃣ Obtener paquete
   const { data: pack, error: packError } = await supabase
@@ -65,13 +70,13 @@ export async function POST(req: Request) {
     );
   }
 
-  // 5️⃣ Crear user_package PRIMERO
+  // 5️⃣ Crear user_package
   const expiresAt =
     pack.type === "subscription"
       ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
       : null;
 
-  const { error: userPackageError } = await supabase
+  const { data: newUserPackage, error: userPackageError } = await supabase
     .from("user_packages")
     .insert({
       user_id: user.id,
@@ -82,12 +87,14 @@ export async function POST(req: Request) {
           : null,
       status: "active",
       expires_at: expiresAt,
-    });
+    })
+    .select()
+    .single();
 
-  if (userPackageError) {
+  if (userPackageError || !newUserPackage) {
     console.error("ERROR USER PACKAGE:", userPackageError);
     return NextResponse.json(
-      { error: userPackageError.message },
+      { error: userPackageError?.message || "Error creando paquete" },
       { status: 500 }
     );
   }
@@ -107,12 +114,10 @@ export async function POST(req: Request) {
   if (paymentError) {
     console.error("ERROR PAYMENT:", paymentError);
 
-    // revertir user_package si falla payment
     await supabase
       .from("user_packages")
       .delete()
-      .eq("user_id", user.id)
-      .eq("package_id", pack.id);
+      .eq("id", newUserPackage.id);
 
     return NextResponse.json(
       { error: paymentError.message },
@@ -120,7 +125,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // 7️⃣ Restar saldo AL FINAL
+  // 7️⃣ Restar saldo
   const newBalance = Number(profile.balance) - Number(pack.price);
 
   const { error: updateError } = await supabase
@@ -131,7 +136,6 @@ export async function POST(req: Request) {
   if (updateError) {
     console.error("ERROR UPDATE BALANCE:", updateError);
 
-    // revertir payment y user_package
     await supabase
       .from("payments")
       .delete()
@@ -141,8 +145,7 @@ export async function POST(req: Request) {
     await supabase
       .from("user_packages")
       .delete()
-      .eq("user_id", user.id)
-      .eq("package_id", pack.id);
+      .eq("id", newUserPackage.id);
 
     return NextResponse.json(
       { error: updateError.message },
@@ -150,8 +153,12 @@ export async function POST(req: Request) {
     );
   }
 
-  // 8️⃣ Asignar pronósticos activos automáticamente
-  await assignActivePredictionsToUser(supabase, user.id, pack);
+  // 8️⃣ Asignar y consumir paquete (usa ADMIN internamente)
+  await assignActivePredictionsToUser(
+    user.id,
+    pack,
+    newUserPackage.id
+  );
 
   return NextResponse.json({ success: true });
 }

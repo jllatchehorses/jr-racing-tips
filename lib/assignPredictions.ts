@@ -1,59 +1,153 @@
-import { SupabaseClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function assignActivePredictionsToUser(
-  supabase: SupabaseClient,
   userId: string,
-  pack: any
+  pack: any,
+  userPackageId: string
 ) {
-  const now = new Date().toISOString();
+  const supabase = supabaseAdmin;
+  const nowIso = new Date().toISOString();
 
-  // 1️⃣ Obtener predictions activos (pending + con fecha futura válida)
-  let query = supabase
-    .from("predictions")
-    .select("*")
-    .eq("result", "pending")
-    .not("race_datetime", "is", null) // 🔒 evita picks antiguos sin fecha
-    .gt("race_datetime", now)
-    .order("race_datetime", { ascending: true });
-
-  // 🎯 Filtrado por tipo de pack
+  // =========================
+  // 🎯 DAILY
+  // =========================
   if (pack.type === "daily") {
-    query = query.eq("type", "daily").limit(1);
-  }
+    const { data: dailyPredictions, error } = await supabase
+      .from("predictions")
+      .select("*")
+      .eq("type", "daily")
+      .eq("result", "pending")
+      .gt("race_datetime", nowIso)
+      .order("race_datetime", { ascending: true })
+      .limit(1);
 
-  if (pack.type === "consumable") {
-    query = query
-      .eq("type", "regular")
-      .limit(pack.total_predictions);
-  }
+    if (error) {
+      console.log("ERROR BUSCANDO DAILY:", error);
+      return;
+    }
 
-  // subscription recibe todos los pending futuros
+    if (!dailyPredictions || dailyPredictions.length === 0) {
+      console.log("NO SE ENCONTRÓ DAILY");
+      return;
+    }
 
-  const { data: predictions, error } = await query;
+    const dailyPrediction = dailyPredictions[0];
 
-  if (error) {
-    console.error("Error obteniendo predictions activas:", error);
-    return;
-  }
-
-  if (!predictions || predictions.length === 0) return;
-
-  for (const prediction of predictions) {
-    // 2️⃣ Evitar duplicados
+    // Evitar duplicado
     const { data: existing } = await supabase
       .from("user_predictions")
       .select("id")
       .eq("user_id", userId)
-      .eq("prediction_id", prediction.id)
-      .maybeSingle();
+      .eq("prediction_id", dailyPrediction.id)
+      .limit(1);
 
-    if (existing) continue;
+    if (existing && existing.length > 0) return;
 
-    // 3️⃣ Insertar asignación
+    // Insertar asignación
     await supabase.from("user_predictions").insert({
       user_id: userId,
-      prediction_id: prediction.id,
+      prediction_id: dailyPrediction.id,
       assigned_at: new Date().toISOString(),
     });
+
+    // 🔥 Consumir paquete con ADMIN (sin RLS)
+    const { error: updateError } = await supabase
+      .from("user_packages")
+      .update({
+        remaining_predictions: 0,
+        status: "consumed",
+      })
+      .eq("id", userPackageId);
+
+    if (updateError) {
+      console.log("ERROR CONSUMIENDO PAQUETE:", updateError);
+    }
+
+    return;
+  }
+
+  // =========================
+  // 🎯 CONSUMABLE
+  // =========================
+  if (pack.type === "consumable") {
+    const { data: userPackage } = await supabase
+      .from("user_packages")
+      .select("remaining_predictions")
+      .eq("id", userPackageId)
+      .single();
+
+    if (!userPackage || !userPackage.remaining_predictions) return;
+
+    const { data: predictions } = await supabase
+      .from("predictions")
+      .select("*")
+      .eq("type", "regular")
+      .eq("result", "pending")
+      .gt("race_datetime", nowIso)
+      .order("race_datetime", { ascending: true });
+
+    if (!predictions || predictions.length === 0) return;
+
+    let remaining = userPackage.remaining_predictions;
+
+    for (const prediction of predictions) {
+      if (remaining <= 0) break;
+
+      const { data: exists } = await supabase
+        .from("user_predictions")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("prediction_id", prediction.id)
+        .limit(1);
+
+      if (exists && exists.length > 0) continue;
+
+      await supabase.from("user_predictions").insert({
+        user_id: userId,
+        prediction_id: prediction.id,
+        assigned_at: new Date().toISOString(),
+      });
+
+      remaining--;
+    }
+
+    await supabase
+      .from("user_packages")
+      .update({ remaining_predictions: remaining })
+      .eq("id", userPackageId);
+
+    return;
+  }
+
+  // =========================
+  // 🎯 SUBSCRIPTION
+  // =========================
+  if (pack.type === "subscription") {
+    const { data: predictions } = await supabase
+      .from("predictions")
+      .select("*")
+      .eq("result", "pending")
+      .gt("race_datetime", nowIso);
+
+    if (!predictions) return;
+
+    for (const prediction of predictions) {
+      const { data: exists } = await supabase
+        .from("user_predictions")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("prediction_id", prediction.id)
+        .limit(1);
+
+      if (exists && exists.length > 0) continue;
+
+      await supabase.from("user_predictions").insert({
+        user_id: userId,
+        prediction_id: prediction.id,
+        assigned_at: new Date().toISOString(),
+      });
+    }
+
+    return;
   }
 }
