@@ -43,5 +43,21 @@ export async function GET() {
     );
   }
 
-  return NextResponse.json({ predictions });
+  // 👥 Contar usuarios por prediction
+  const predictionsWithUsers = await Promise.all(
+    (predictions || []).map(async (p: any) => {
+
+      const { count } = await supabase
+        .from("user_predictions")
+        .select("*", { count: "exact", head: true })
+        .eq("prediction_id", p.id);
+
+      return {
+        ...p,
+        users_count: count || 0,
+      };
+    })
+  );
+
+  return NextResponse.json({ predictions: predictionsWithUsers });
 }
