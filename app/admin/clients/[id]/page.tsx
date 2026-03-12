@@ -26,6 +26,7 @@ export default async function ClientDetailPage({
   }
 
   // CLIENTE
+
   const { data: client } = await supabase
     .from("profiles")
     .select("*")
@@ -36,7 +37,8 @@ export default async function ClientDetailPage({
     redirect("/admin/clients");
   }
 
-  // PAQUETES
+  // PAQUETES CLIENTE
+
   const { data: packages } = await supabase
     .from("user_packages")
     .select(`
@@ -53,7 +55,15 @@ export default async function ClientDetailPage({
     .eq("user_id", id)
     .order("created_at", { ascending: false });
 
+  // PAQUETES DISPONIBLES
+
+  const { data: availablePackages } = await supabase
+    .from("packages")
+    .select("*")
+    .order("price", { ascending: true });
+
   // PICKS
+
   const { data: predictions } = await supabase
     .from("user_predictions")
     .select(`
@@ -69,6 +79,7 @@ export default async function ClientDetailPage({
     .order("assigned_at", { ascending: false });
 
   // PAGOS
+
   const { data: payments } = await supabase
     .from("payments")
     .select("*")
@@ -95,36 +106,127 @@ export default async function ClientDetailPage({
           <div className="space-y-2 text-sm">
 
             <div>
-              Email:{" "}
-              <span className="text-slate-300">
+              Email:
+              <span className="text-slate-300 ml-2">
                 {client.email || "No disponible"}
               </span>
             </div>
 
             <div>
-              Registro:{" "}
-              <span className="text-slate-300">
+              Registro:
+              <span className="text-slate-300 ml-2">
                 {new Date(client.created_at).toLocaleDateString("es-ES")}
               </span>
             </div>
 
             <div>
-              Saldo:{" "}
-              <span className="text-green-400 font-semibold">
+              Saldo:
+              <span className="text-green-400 font-semibold ml-2">
                 {Number(client.balance || 0).toFixed(2)} €
               </span>
             </div>
 
             <div>
-              Rol:{" "}
-              <span className="text-slate-300">
+              Rol:
+              <span className="text-slate-300 ml-2">
                 {client.role}
+              </span>
+            </div>
+
+            <div>
+              Estado:
+              <span className={`ml-2 font-semibold ${
+                client.banned ? "text-red-400" : "text-green-400"
+              }`}>
+                {client.banned ? "Usuario baneado" : "Activo"}
               </span>
             </div>
 
           </div>
 
         </div>
+
+
+        {/* CONTROL USUARIO */}
+
+        <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
+
+          <h2 className="text-xl font-semibold mb-4">
+            🚫 Control de usuario
+          </h2>
+
+          <form
+            action="/api/admin/ban-user"
+            method="POST"
+            className="flex gap-4 items-center"
+          >
+
+            <input type="hidden" name="user_id" value={id} />
+
+            <input
+              type="hidden"
+              name="banned"
+              value={client.banned ? "false" : "true"}
+            />
+
+            <button
+              className={`px-4 py-2 rounded-lg font-semibold ${
+                client.banned
+                  ? "bg-green-500 hover:bg-green-600"
+                  : "bg-red-500 hover:bg-red-600"
+              }`}
+            >
+              {client.banned ? "Desbanear usuario" : "Banear usuario"}
+            </button>
+
+          </form>
+
+        </div>
+
+
+        {/* DAR PAQUETE */}
+
+        <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
+
+          <h2 className="text-xl font-semibold mb-4">
+            🎁 Dar paquete manual
+          </h2>
+
+          <form
+            action="/api/admin/give-package"
+            method="POST"
+            className="flex gap-4 items-center"
+          >
+
+            <input type="hidden" name="user_id" value={id} />
+
+            <select
+              name="package_id"
+              className="p-2 bg-slate-800 border border-slate-700 rounded"
+            >
+
+              <option value="">
+                Seleccionar paquete
+              </option>
+
+              {availablePackages?.map((p:any)=>(
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.price}€)
+                </option>
+              ))}
+
+            </select>
+
+            <button
+              className="bg-green-500 hover:bg-green-600 px-4 py-2 rounded-lg font-semibold"
+            >
+              Asignar paquete
+            </button>
+
+          </form>
+
+        </div>
+
 
         {/* HISTORIAL PAQUETES */}
 
@@ -155,16 +257,43 @@ export default async function ClientDetailPage({
 
                   </div>
 
-                  <div className="font-semibold text-right">
+                  <div className="flex items-center gap-6">
 
-                    {p.packages?.type === "consumable" &&
-                      `${p.remaining_predictions} restantes`}
+                    <div className="font-semibold text-right">
 
-                    {p.packages?.type === "daily" &&
-                      "Apuesta del día"}
+                      {p.packages?.type === "consumable" &&
+                        `${p.remaining_predictions} restantes`}
 
-                    {p.packages?.type === "subscription" &&
-                      `Activo hasta ${new Date(p.expires_at).toLocaleDateString("es-ES")}`}
+                      {p.packages?.type === "daily" &&
+                        "Apuesta del día"}
+
+                      {p.packages?.type === "subscription" &&
+                        `Activo hasta ${new Date(p.expires_at).toLocaleDateString("es-ES")}`}
+
+                    </div>
+
+                    {p.status === "active" && (
+
+                      <form
+                        action="/api/admin/cancel-package"
+                        method="POST"
+                      >
+
+                        <input
+                          type="hidden"
+                          name="user_package_id"
+                          value={p.id}
+                        />
+
+                        <button
+                          className="bg-red-500 hover:bg-red-600 px-3 py-1 rounded text-xs font-semibold"
+                        >
+                          Cancelar
+                        </button>
+
+                      </form>
+
+                    )}
 
                   </div>
 
@@ -183,6 +312,7 @@ export default async function ClientDetailPage({
           )}
 
         </div>
+
 
         {/* PICKS */}
 
@@ -250,6 +380,7 @@ export default async function ClientDetailPage({
           )}
 
         </div>
+
 
         {/* PAGOS */}
 
